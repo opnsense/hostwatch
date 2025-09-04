@@ -1,0 +1,5 @@
+.cursor
+.idea
+hosts.db
+Cargo.lock
+target
