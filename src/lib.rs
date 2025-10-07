@@ -165,6 +165,15 @@ impl HostWatch {
                     host_info.clone().unwrap().ip_address.unwrap().as_str(),
                     host_info.clone().unwrap().interface_name.unwrap().as_str()
                 );
+            } else if host_info.clone().is_some_and(|x| x.sec_since_last_update.is_some_and(|x| x > 5)) {
+                /* XXX: change 5 seconds to a sane value */
+                info!(
+                    "new station activity {:} using {:} at {:} since {:?} seconds",
+                    host_info.clone().unwrap().ether_address.unwrap().as_str(),
+                    host_info.clone().unwrap().ip_address.unwrap().as_str(),
+                    host_info.clone().unwrap().interface_name.unwrap().as_str(),
+                    host_info.clone().unwrap().sec_since_last_update.unwrap()
+                );
             }
 
             debug!("processed: {:?}", host_info);

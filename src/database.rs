@@ -21,22 +21,24 @@ pub struct HostInfo {
     pub last_seen: Option<String>,
     pub prev_ether_address: Option<String>,
     pub prev_last_seen: Option<String>,
-    pub was_inserted: Option<i32>
+    pub was_inserted: Option<i32>,
+    pub sec_since_last_update: Option<i32>
 }
 
 impl HostInfo {
     pub fn new() -> Self {
         Self {
-            protocol: None,
             interface_name: None,
+            ip_address: None,
+            protocol: None,
             ether_address: None,
             id: None,
             first_seen: None,
-            ip_address: None,
-            was_inserted: None,
-            prev_ether_address: None,
             last_seen: None,
+            prev_ether_address: None,
             prev_last_seen: None,
+            was_inserted: None,
+            sec_since_last_update: None,
         }
     }
 }
@@ -83,6 +85,7 @@ impl Database {
                 last_seen timestamp default current_timestamp not null,
                 prev_ether_address text,
                 prev_last_seen timestamp,
+                update_interval_sec integer,
                 unique(protocol, interface_name, ip_address)
             )","
             create table if not exists oui (
@@ -114,8 +117,8 @@ impl Database {
     pub fn update_host(&mut self, host_info: &HostInfo) -> Result<Option<HostInfo>> {
         //let mut updated_host_info = HostInfo::new();
         let sql = "
-            insert into hosts (protocol, interface_name, ether_address, ip_address)
-            values (?1, ?2, ?3, ?4)
+            insert into hosts (protocol, interface_name, ether_address, ip_address, update_interval_sec)
+            values (?1, ?2, ?3, ?4, 0)
             on conflict do update set last_seen = current_timestamp,
                 ether_address = excluded.ether_address,
                 prev_ether_address = case
@@ -127,9 +130,11 @@ impl Database {
                         when ether_address = excluded.ether_address
                         then prev_last_seen
                         else last_seen
-                end
+                end,
+                update_interval_sec = cast(strftime('%s', current_timestamp) as integer) -
+                    cast(strftime('%s', last_seen) as integer)
             returning
-                id, first_seen, last_seen, prev_ether_address, prev_last_seen,
+                id, first_seen, last_seen, prev_ether_address, prev_last_seen, update_interval_sec,
                 (case when last_seen = first_seen then 1 else 0 END) as inserted
 
         ";
@@ -153,7 +158,8 @@ impl Database {
                 result.last_seen = row.get(2)?;
                 result.prev_ether_address = row.get(3)?;
                 result.prev_last_seen = row.get(4)?;
-                result.was_inserted = row.get(5)?;
+                result.sec_since_last_update = row.get(5)?;
+                result.was_inserted = row.get(6)?;
                 result
             })
         ) {
