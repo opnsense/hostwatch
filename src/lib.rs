@@ -66,6 +66,10 @@ pub struct Args {
     #[arg(short, long, default_value = "/tmp")]
     pub working_directory: Option<String>,
 
+    /// Activity timeout [seconds] (report when > x)
+    #[arg(short, long, default_value = "2678400")]
+    pub activity_timeout: u32,
+
     /// Send output to syslog
     #[arg(short='S', long, action = clap::ArgAction::SetTrue, default_value_t = false)]
     pub syslog: bool,
@@ -91,6 +95,7 @@ pub struct HostWatch {
     captures: Vec<Capture<Active>>,
     pcap_filter: String,
     promisc: bool,
+    activity_timeout: u32
 }
 
 impl HostWatch {
@@ -115,6 +120,7 @@ impl HostWatch {
             database,
             captures: Vec::new(),
             promisc: args.promisc,
+            activity_timeout: args.activity_timeout,
             pcap_filter: pcap_filter.join(" && ")
         })
     }
@@ -178,8 +184,7 @@ impl HostWatch {
                     host_info.clone().unwrap().real_ether_address.unwrap_or_else(|| String::from("")),
                     host_info.clone().unwrap().interface_name.unwrap_or_else(|| String::from(""))
                 );
-            } else if host_info.clone().is_some_and(|x| x.sec_since_last_update.is_some_and(|x| x > 5)) {
-                /* XXX: change 5 seconds to a sane value */
+            } else if host_info.clone().is_some_and(|x| x.sec_since_last_update.is_some_and(|x| x > self.activity_timeout as i32)) {
                 info!(
                     "new station activity {} using {} at {} since {} seconds",
                     host_info.clone().unwrap().ether_address.unwrap_or_else(|| String::from("")),
