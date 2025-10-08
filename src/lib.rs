@@ -43,8 +43,8 @@ pub struct Args {
     pub verbose: bool,
 
     /// PID file
-    #[arg(short='P', long)]
-    pub pid_file: Option<String>,
+    #[arg(short='P', long, default_value="/var/run/hostwatch.pid")]
+    pub pid_file: String,
 
     /// Username to use after startup
     #[arg(short, long)]

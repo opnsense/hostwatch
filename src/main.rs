@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result};
 use clap::Parser;
 use std::str::FromStr;
 use cidr::{Ipv4Cidr, Ipv6Cidr};
@@ -11,21 +11,7 @@ use daemonize::Daemonize;
 use hostwatch::Args;
 use hostwatch::HostWatch;
 
-fn check_network(network: &str) -> bool {
-    match Ipv4Cidr::from_str(network) {
-        Ok(_cidr) => {
-            return true;
-        },
-        Err(_e) => {}
-    }
-    match Ipv6Cidr::from_str(network) {
-        Ok(_cidr) => {
-            return true;
-        },
-        Err(_e) => {}
-    }
-    false
-}
+
 
 fn main() -> Result<()> {
     let args = Args::parse();
@@ -39,8 +25,12 @@ fn main() -> Result<()> {
         tracing::Level::INFO
     };
 
-    let stdout_layer = tracing_subscriber::fmt::layer()
-        .with_writer(std::io::stdout);
+    let stdout_layer = if args.foreground {
+        /* log to stdout when running in foreground */
+        Some(tracing_subscriber::fmt::layer().with_writer(std::io::stdout))
+    } else {
+        None
+    };
 
     let syslog_layer_opt = if args.syslog {
         let identity = std::ffi::CStr::from_bytes_with_nul(b"hostwatch\0")?;
@@ -66,12 +56,21 @@ fn main() -> Result<()> {
     if !args.promisc {
         info!("Promiscuous mode enabled");
     }
-    // validate networks, bail when valid
+
+    // validate networks, bail when invalid
     for network in args.skip_nets.iter() {
-        if !check_network(network) {
+        let is_valid = match Ipv4Cidr::from_str(network) {
+            Ok(_cidr) => true,
+            Err(_e) => match Ipv6Cidr::from_str(network) {
+                Ok(_cidr) => true,
+                Err(_e) => false
+            }
+        };
+        if !is_valid {
             panic!("Network {} not valid", network);
+        } else {
+            info!("Skipping network: {}", network);
         }
-        info!("Skipping network: {}", network);
     }
 
     let hostwatch = HostWatch::new(args.clone());
@@ -80,7 +79,7 @@ fn main() -> Result<()> {
     } else {
         let mut daemonize = Daemonize::new()
             .umask(args.clone().umask)
-            .pid_file(args.clone().pid_file.unwrap().as_str())
+            .pid_file(args.clone().pid_file.as_str())
             .chown_pid_file(args.chown_pid_file)
             .working_directory(args.clone().working_directory.unwrap().as_str())
             .privileged_action(|| {
