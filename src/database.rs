@@ -15,11 +15,13 @@ pub struct HostInfo {
     pub ip_address: Option<String>,
     pub protocol: Option<String>,
     pub ether_address: Option<String>,
+    pub real_ether_address: Option<String>, /* for arp the announcement may differ */
     /* result data */
     pub id: Option<i32>,
     pub first_seen: Option<String>,
     pub last_seen: Option<String>,
     pub prev_ether_address: Option<String>,
+    pub prev_real_ether_address: Option<String>,
     pub prev_last_seen: Option<String>,
     pub was_inserted: Option<i32>,
     pub sec_since_last_update: Option<i32>
@@ -32,10 +34,12 @@ impl HostInfo {
             ip_address: None,
             protocol: None,
             ether_address: None,
+            real_ether_address: None,
             id: None,
             first_seen: None,
             last_seen: None,
             prev_ether_address: None,
+            prev_real_ether_address: None,
             prev_last_seen: None,
             was_inserted: None,
             sec_since_last_update: None,
@@ -81,9 +85,11 @@ impl Database {
                 ip_address text,
                 protocol text,
                 ether_address text,
+                real_ether_address text,
                 first_seen timestamp default current_timestamp not null,
                 last_seen timestamp default current_timestamp not null,
                 prev_ether_address text,
+                prev_real_ether_address text,
                 prev_last_seen timestamp,
                 update_interval_sec integer,
                 unique(protocol, interface_name, ip_address)
@@ -115,26 +121,32 @@ impl Database {
     }
 
     pub fn update_host(&mut self, host_info: &HostInfo) -> Result<Option<HostInfo>> {
-        //let mut updated_host_info = HostInfo::new();
         let sql = "
-            insert into hosts (protocol, interface_name, ether_address, ip_address, update_interval_sec)
-            values (?1, ?2, ?3, ?4, 0)
+            insert into hosts (protocol, interface_name, ether_address, real_ether_address, ip_address, update_interval_sec)
+            values (?1, ?2, ?3, ?4, ?5, 0)
             on conflict do update set last_seen = current_timestamp,
                 ether_address = excluded.ether_address,
+                real_ether_address = excluded.real_ether_address,
                 prev_ether_address = case
                         when ether_address = excluded.ether_address
                         then prev_ether_address
                         else ether_address
                 end,
+                prev_real_ether_address = case
+                        when ether_address = excluded.real_ether_address
+                        then prev_real_ether_address
+                        else real_ether_address
+                end,
                 prev_last_seen = case
-                        when ether_address = excluded.ether_address
+                        when ether_address = excluded.ether_address and real_ether_address = excluded.prev_real_ether_address
                         then prev_last_seen
                         else last_seen
                 end,
                 update_interval_sec = cast(strftime('%s', current_timestamp) as integer) -
                     cast(strftime('%s', last_seen) as integer)
             returning
-                id, first_seen, last_seen, prev_ether_address, prev_last_seen, update_interval_sec,
+                id, first_seen, last_seen, prev_ether_address, prev_real_ether_address,
+                prev_last_seen, update_interval_sec,
                 (case when last_seen = first_seen then 1 else 0 END) as inserted
 
         ";
@@ -145,6 +157,7 @@ impl Database {
                 host_info.protocol,
                 host_info.interface_name,
                 host_info.ether_address,
+                host_info.real_ether_address,
                 host_info.ip_address
             ],
             |row| Ok({
@@ -153,13 +166,15 @@ impl Database {
                 result.ip_address = host_info.ip_address.clone();
                 result.protocol = host_info.protocol.clone();
                 result.ether_address = host_info.ether_address.clone();
+                result.real_ether_address = host_info.real_ether_address.clone();
                 result.id = row.get(0)?;
                 result.first_seen = row.get(1)?;
                 result.last_seen = row.get(2)?;
                 result.prev_ether_address = row.get(3)?;
-                result.prev_last_seen = row.get(4)?;
-                result.sec_since_last_update = row.get(5)?;
-                result.was_inserted = row.get(6)?;
+                result.prev_real_ether_address = row.get(4)?;
+                result.prev_last_seen = row.get(5)?;
+                result.sec_since_last_update = row.get(6)?;
+                result.was_inserted = row.get(7)?;
                 result
             })
         ) {

@@ -143,15 +143,15 @@ impl HostWatch {
 
         // process messages to database in main thread
         for host_info in rx {
-            debug!("ARP packet: {:?}", host_info);
+            debug!("discover packet: {:?}", host_info);
             let host_info = self.database.update_host(&host_info)?;
             /* Signal events via logging */
             if host_info.clone().is_some_and(|x| x.was_inserted == Some(1)){
                 info!(
-                    "new station host {:} using {:} at {:}",
-                    host_info.clone().unwrap().ether_address.unwrap().as_str(),
-                    host_info.clone().unwrap().ip_address.unwrap().as_str(),
-                    host_info.clone().unwrap().interface_name.unwrap().as_str()
+                    "new station host {} using {} at {}",
+                    host_info.clone().unwrap().ether_address.unwrap_or_else(|| String::from("")),
+                    host_info.clone().unwrap().ip_address.unwrap_or_else(|| String::from("")),
+                    host_info.clone().unwrap().interface_name.unwrap_or_else(|| String::from(""))
                 );
             } else if host_info.clone().is_some_and(|x| {
                     x.ether_address != x.prev_ether_address &&
@@ -159,19 +159,32 @@ impl HostWatch {
                     x.prev_ether_address.is_some()
             }){
                 info!(
-                    "changed ethernet address host {:} moved from {:} to {:} at {:}",
-                    host_info.clone().unwrap().prev_ether_address.unwrap().as_str(),
-                    host_info.clone().unwrap().ether_address.unwrap().as_str(),
-                    host_info.clone().unwrap().ip_address.unwrap().as_str(),
-                    host_info.clone().unwrap().interface_name.unwrap().as_str()
+                    "changed ethernet address host {} moved from {} to {} at {}",
+                    host_info.clone().unwrap().prev_ether_address.unwrap_or_else(|| String::from("")),
+                    host_info.clone().unwrap().ether_address.unwrap_or_else(|| String::from("")),
+                    host_info.clone().unwrap().ip_address.unwrap_or_else(|| String::from("")),
+                    host_info.clone().unwrap().interface_name.unwrap_or_else(|| String::from(""))
+                );
+            } else if host_info.clone().is_some_and(|x| {
+                    x.ether_address != x.real_ether_address &&
+                    x.real_ether_address != x.prev_real_ether_address &&
+                    x.ether_address.is_some() &&
+                    x.real_ether_address.is_some()
+            }){
+                info!(
+                    "ethernet mismatch host {} at {} announced by {} interface {}",
+                    host_info.clone().unwrap().ip_address.unwrap_or_else(|| String::from("")).as_str(),
+                    host_info.clone().unwrap().ether_address.unwrap_or_else(|| String::from("")),
+                    host_info.clone().unwrap().real_ether_address.unwrap_or_else(|| String::from("")),
+                    host_info.clone().unwrap().interface_name.unwrap_or_else(|| String::from(""))
                 );
             } else if host_info.clone().is_some_and(|x| x.sec_since_last_update.is_some_and(|x| x > 5)) {
                 /* XXX: change 5 seconds to a sane value */
                 info!(
-                    "new station activity {:} using {:} at {:} since {:?} seconds",
-                    host_info.clone().unwrap().ether_address.unwrap().as_str(),
-                    host_info.clone().unwrap().ip_address.unwrap().as_str(),
-                    host_info.clone().unwrap().interface_name.unwrap().as_str(),
+                    "new station activity {} using {} at {} since {} seconds",
+                    host_info.clone().unwrap().ether_address.unwrap_or_else(|| String::from("")),
+                    host_info.clone().unwrap().ip_address.unwrap_or_else(|| String::from("")),
+                    host_info.clone().unwrap().interface_name.unwrap_or_else(|| String::from("")),
                     host_info.clone().unwrap().sec_since_last_update.unwrap()
                 );
             }
@@ -228,6 +241,7 @@ impl HostWatch {
 
                     let mut host_info = HostInfo::new();
                     host_info.interface_name = Some(interface_name.clone());
+                    host_info.real_ether_address = Some(ethernet.get_source().to_string());
                     if ethernet.get_ethertype() == EtherTypes::Arp {
                         if let Some(arp) = ArpPacket::new(ethernet.payload()) {
                             host_info.protocol = Some("inet".to_string());
