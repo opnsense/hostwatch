@@ -1,9 +1,8 @@
-use anyhow::Result;
+use anyhow::{Result};
 use rusqlite::Connection;
 use tracing::{debug, info, error};
 use csv;
 use serde::{Deserialize, Serialize};
-use crate::Args;
 
 /**
  * Host info record, used to update and return host information
@@ -62,11 +61,17 @@ pub struct Database {
 }
 
 impl Database {
-    pub fn new(args: Args) -> Result<Self> {
-        let conn = Connection::open(args.database)?;
+    pub fn new(database: String, oui_path: String) -> Result<Self> {
+        let conn = match Connection::open(database) {
+            Ok(conn) => conn,
+            Err(error) => {
+                error!("Unable to connect to database : {error:?}");
+                panic!("Unable to connect to database : {error:?}");
+            }
+        };
         let mut db = Self { conn };
         db.initialize_tables()?;
-        match db.import_oui_csv(args.oui_path.as_str()) {
+        match db.import_oui_csv(oui_path.as_str()) {
             Ok(_) => {}
             Err(error) => {
                 error!("Skip import OUI : {error:?}");

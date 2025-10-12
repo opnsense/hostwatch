@@ -91,7 +91,8 @@ fn parse_permissions(string: &str) -> Result<u32, anyhow::Error> {
 pub struct HostWatch {
     interfaces: Vec<String>,
     system_interfaces: Vec<String>,
-    database: Database,
+    database: String,
+    oui_path: String,
     captures: Vec<Capture<Active>>,
     pcap_filter: String,
     promisc: bool,
@@ -101,7 +102,6 @@ pub struct HostWatch {
 impl HostWatch {
     pub fn new(args: Args) -> Result<Self> {
         let interfaces = &args.interface.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-        let database = Database::new(args.clone())?;
         let mut pcap_filter = Vec::new();
         pcap_filter.push("(\
             (arp && not src 0) || \
@@ -111,15 +111,16 @@ impl HostWatch {
             ) \
             && not src ::))\
          ".to_string());
-        for item in args.skip_nets.iter() {
+        for item in args.clone().skip_nets.iter() {
             pcap_filter.push(format!("( net !{} )", item.as_str()));
         }
         Ok(Self {
             interfaces: interfaces.iter().map(|s| s.to_string()).collect(),
             system_interfaces: Vec::new(),
-            database,
+            database: args.clone().database,
+            oui_path: args.clone().oui_path,
             captures: Vec::new(),
-            promisc: args.promisc,
+            promisc: args.clone().promisc,
             activity_timeout: args.activity_timeout,
             pcap_filter: pcap_filter.join(" && ")
         })
@@ -148,9 +149,10 @@ impl HostWatch {
         }
 
         // process messages to database in main thread
+        let mut database = Database::new(self.database, self.oui_path)?;
         for host_info in rx {
             debug!("discover packet: {:?}", host_info);
-            let host_info = self.database.update_host(&host_info)?;
+            let host_info = database.update_host(&host_info)?;
             /* Signal events via logging */
             if host_info.clone().is_some_and(|x| x.was_inserted == Some(1)){
                 info!(
