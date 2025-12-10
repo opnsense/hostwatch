@@ -2,7 +2,7 @@ use std::sync::{mpsc};
 use std::sync::mpsc::Sender;
 use std::thread;
 use anyhow::{anyhow, Result};
-use pcap::{Active, Capture, Device, Error as PcapError};
+use pcap::{Active, Activated, Offline, Capture, Device, Error as PcapError};
 use clap::Parser;
 use tracing::{debug, error, info, warn};
 use pnet::packet::arp::ArpPacket;
@@ -21,6 +21,10 @@ pub struct Args {
     /// Network interface to monitor
     #[arg(short, long, default_value = "any")]
     pub interface: Vec<String>,
+
+    /// pcap file source
+    #[arg(short='F', long)]
+    pub filename: String,
 
     /// Networks to ignore
     #[arg(short, long)]
@@ -90,10 +94,12 @@ fn parse_permissions(string: &str) -> Result<u32, anyhow::Error> {
 
 pub struct HostWatch {
     interfaces: Vec<String>,
+    filename: Option<String>,
     system_interfaces: Vec<String>,
     database: String,
     oui_path: String,
-    captures: Vec<Capture<Active>>,
+    device_captures: Vec<Capture<Active>>,
+    file_captures: Vec<Capture<Offline>>,
     pcap_filter: String,
     promisc: bool,
     activity_timeout: u32
@@ -116,10 +122,12 @@ impl HostWatch {
         }
         Ok(Self {
             interfaces: interfaces.iter().map(|s| s.to_string()).collect(),
+            filename: Some(args.clone().filename),
             system_interfaces: Vec::new(),
             database: args.clone().database,
             oui_path: args.clone().oui_path,
-            captures: Vec::new(),
+            device_captures: Vec::new(),
+            file_captures: Vec::new(),
             promisc: args.clone().promisc,
             activity_timeout: args.activity_timeout,
             pcap_filter: pcap_filter.join(" && ")
@@ -128,25 +136,45 @@ impl HostWatch {
 
 
     pub fn init(mut self) ->  Self {
-        info!("Initializing packet capture on interfaces: {:?}", self.interfaces);
-        match self.initialize_captures() {
-            Ok(_) => {}
-            Err(_) => {}
+        self.device_captures.clear();
+        self.file_captures.clear();
+        self.system_interfaces.clear();
+        debug!("pcap filter is: {:?}", self.pcap_filter);
+
+        if self.filename.is_some() {
+            info!("Initializing packet capture on file: {:?}", self.filename.clone().unwrap());
+            match self.initialize_file_captures() {
+                Ok(_) => {}
+                Err(_) => {}
+            }
+        } else {
+            info!("Initializing packet capture on interfaces: {:?}", self.interfaces);
+            match self.initialize_device_captures() {
+                Ok(_) => {}
+                Err(_) => {}
+            }
+            info!("Starting packet capture loop on {} interfaces...", self.device_captures.len());
         }
-        info!("Starting packet capture loop on {} interfaces...", self.captures.len());
         self
     }
 
     pub fn run(mut self) -> Result<()> {
         // start a thread per interface capture
         let (tx, rx) = mpsc::channel::<HostInfo>();
-        for (i, capture) in self.captures.drain(..).enumerate() {
+        for (i, capture) in self.device_captures.drain(..).enumerate() {
             let interface_name = self.system_interfaces[i].clone();
             let tx_clone = tx.clone();
             thread::spawn(move || {
-                Self::capture_interface_packets(capture, interface_name, tx_clone)
+                Self::capture_packets(capture, interface_name, tx_clone)
             });
         }
+        for (_i, capture) in self.file_captures.drain(..).enumerate() {
+            let tx_clone = tx.clone();
+            thread::spawn(move || {
+                Self::capture_packets(capture, "pcap".to_string(), tx_clone)
+            });
+        }
+        drop(tx); // unused original sender
 
         // process messages to database in main thread
         let mut database = Database::new(self.database, self.oui_path)?;
@@ -198,19 +226,28 @@ impl HostWatch {
 
             debug!("processed: {:?}", host_info);
         }
+        info!("done processing (no more active captures)");
         Ok(())
     }
 
-    fn initialize_captures(&mut self) -> Result<()> {
-        self.captures.clear();
-        self.system_interfaces.clear();
-        debug!("pcap filter is: {:?}", self.pcap_filter);
+    fn initialize_file_captures(&mut self) -> Result<()> {
+        if let Ok(capture) = self.create_file_capture(self.filename.clone().unwrap()) {
+            self.file_captures.push(capture);
+            info!("Added capture for pcap file: {}", self.filename.clone().unwrap());
+            Ok(())
+        } else {
+            error!("Failed to initialize capture for pcap file: {}", self.filename.clone().unwrap());
+            Err(anyhow!("Failed to initialize file capture"))
+        }
+    }
+
+    fn initialize_device_captures(&mut self) -> Result<()> {
         let devices = Device::list()?;
 
         for device in devices {
             if self.interfaces.contains(&"any".to_string()) || self.interfaces.contains(&device.name.clone()) {
-                if let Ok(capture) = self.create_capture(&device) {
-                    self.captures.push(capture);
+                if let Ok(capture) = self.create_device_capture(&device) {
+                    self.device_captures.push(capture);
                     self.system_interfaces.push(device.name.clone());
                     info!("Added capture for device: {} ({})", 
                           device.name, 
@@ -220,15 +257,22 @@ impl HostWatch {
                 }    
             }
         }
-        if self.captures.is_empty() {
+        if self.device_captures.is_empty() {
             return Err(anyhow::anyhow!("No captures could be initialized"));
         }
 
-        info!("Initialized {} packet captures", self.captures.len());
+        info!("Initialized {} packet device_captures", self.device_captures.len());
         Ok(())
     }
 
-    fn create_capture(&self, device: &Device) -> Result<Capture<Active>> {
+    fn create_file_capture(&self, filename: String) -> Result<Capture<Offline>>
+    {
+        let mut capture = Capture::from_file(filename)?;
+        capture.filter(self.pcap_filter.as_str(), true)?;
+        Ok(capture)
+    }
+
+    fn create_device_capture(&self, device: &Device) -> Result<Capture<Active>> {
         let mut capture = Capture::from_device(device.clone())?
             .promisc(!self.promisc)
             .snaplen(65535)
@@ -240,7 +284,9 @@ impl HostWatch {
         Ok(capture)
     }
 
-    fn capture_interface_packets(mut capture: Capture<Active>, interface_name: String, tx: Sender<HostInfo>) {
+    fn capture_packets<T>(mut capture: Capture<T>, interface_name: String, tx: Sender<HostInfo>)
+        where T: Activated,
+    {
         loop {
             match capture.next_packet() {
                 Ok(packet) => {
@@ -268,6 +314,10 @@ impl HostWatch {
                 }
                 Err(PcapError::TimeoutExpired) => {
                     // Timeout is expected, continue
+                }
+                Err(PcapError::NoMorePackets) => {
+                    // File mode, exit when file is fully read
+                    break;
                 }
                 Err(e) => {
                     error!("Error reading from capture: {}", e);
