@@ -9,6 +9,10 @@ use pnet::packet::arp::ArpPacket;
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::{ethernet::EthernetPacket, Packet};
 use pnet::packet::ethernet::EtherTypes;
+use pnet::packet::icmpv6::{Icmpv6Packet, Icmpv6Types};
+use pnet::packet::icmpv6::ndp::NeighborSolicitPacket;
+use pnet::packet::ip::IpNextHeaderProtocols;
+use std::net::Ipv6Addr;
 
 pub mod database;
 
@@ -113,9 +117,8 @@ impl HostWatch {
             (arp && not src 0) || \
             (\
                 icmp6 && (icmp6[icmp6type] == icmp6-neighborsolicit || \
-                icmp6[icmp6type] == icmp6-neighboradvert\
-            ) \
-            && not src ::))\
+                icmp6[icmp6type] == icmp6-neighboradvert) \
+            ))\
          ".to_string());
         for item in args.clone().skip_nets.iter() {
             pcap_filter.push(format!("( net !{} )", item.as_str()));
@@ -303,12 +306,27 @@ impl HostWatch {
                         }
                     } else if ethernet.get_ethertype() == EtherTypes::Ipv6 {
                         if let Some(ipv6) = Ipv6Packet::new(ethernet.payload()) {
-                            host_info.protocol = Some("inet6".to_string());
+                            if ipv6.get_next_header() != IpNextHeaderProtocols::Icmpv6 {
+                                return;
+                            }
+                            let icmpv6 = match Icmpv6Packet::new(ipv6.payload()) {
+                                Some(pkt) => pkt,
+                                None => return,
+                            };
                             host_info.ether_address = Some(ethernet.get_source().to_string());
-                            host_info.ip_address = Some(ipv6.get_source().to_string());
+                            host_info.protocol = Some("inet6".to_string());
+                            if ipv6.get_source() == Ipv6Addr::UNSPECIFIED && icmpv6.get_icmpv6_type() == Icmpv6Types::NeighborSolicit {
+                                /* Duplicate Address Detection (DAD) can be used to find the GUA/LUA a client intends to use*/
+                                if let Some(ns) = NeighborSolicitPacket::new(icmpv6.packet()) {
+                                    host_info.ip_address = Some(ns.get_target_addr().to_string());
+                                }
+                            } else if ipv6.get_source() != Ipv6Addr::UNSPECIFIED {
+                                /* the actual address used by the client, usually a LL */
+                                host_info.ip_address = Some(ipv6.get_source().to_string());
+                            }
                         }
                     }
-                    if !host_info.protocol.is_none() {
+                    if !host_info.ip_address.is_none() {
                         tx.send(host_info).unwrap();
                     }
                 }
