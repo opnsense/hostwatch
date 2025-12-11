@@ -9,8 +9,8 @@ assignees: ''
 
 Before you add a new report, we ask you kindly to acknowledge the following:
 
-- [ ] I have read the contributing guide lines at https://github.com/opnsense/hostwatch/blob/master/CONTRIBUTING.md
-- [ ] I am convinced that my issue is new after having checked both open and closed issues at https://github.com/opnsense/hostwatch/issues?q=is%3Aissue
+- [ ] I have read the contributing guide lines at https://github.com/opnsense/core/blob/master/CONTRIBUTING.md
+- [ ] I am convinced that my issue is new after having checked both open and closed issues at https://github.com/opnsense/core/issues?q=is%3Aissue
 
 **Is your feature request related to a problem? Please describe.**
 
@@ -20,6 +20,7 @@ i.e. "For the purpose of [...] I am missing a solution that will [...]."
 **Describe the solution you like**
 
 A clear and concise description of what you want to happen.
+(e.g. I would like an input field in the `/ui/firewall/alias` which would add .... to ....)
 
 **Describe alternatives you considered**
 
