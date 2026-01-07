@@ -28,7 +28,7 @@ pub struct Args {
 
     /// pcap file source
     #[arg(short='F', long)]
-    pub filename: String,
+    pub filename: Option<String>,
 
     /// Networks to ignore
     #[arg(short, long)]
@@ -125,7 +125,7 @@ impl HostWatch {
         }
         Ok(Self {
             interfaces: interfaces.iter().map(|s| s.to_string()).collect(),
-            filename: Some(args.clone().filename),
+            filename: args.clone().filename,
             system_interfaces: Vec::new(),
             database: args.clone().database,
             oui_path: args.clone().oui_path,

@@ -50,7 +50,7 @@ fn main() -> Result<()> {
         .add_directive(format!("hostwatch={}", level).parse()?);
     tracing_subscriber::registry().with(filter).with(stdout_layer).with(syslog_layer_opt).init();
 
-    if !args.interface.contains(&"any".to_string()) && !args.filename.is_empty() {
+    if !args.interface.contains(&"any".to_string()) && !args.filename.clone().unwrap().is_empty() {
         panic!("File [-F] and interface [-i] modes can not be combined");
     }
     info!("Starting hostwatch on interface: {:?}", args.interface);
