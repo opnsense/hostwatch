@@ -199,9 +199,9 @@ impl HostWatch {
             }){
                 info!(
                     "changed ethernet address host {} moved from {} to {} at {}",
+                    host_info.clone().unwrap().ip_address.unwrap_or_else(|| String::from("")),
                     host_info.clone().unwrap().prev_ether_address.unwrap_or_else(|| String::from("")),
                     host_info.clone().unwrap().ether_address.unwrap_or_else(|| String::from("")),
-                    host_info.clone().unwrap().ip_address.unwrap_or_else(|| String::from("")),
                     host_info.clone().unwrap().interface_name.unwrap_or_else(|| String::from(""))
                 );
             } else if host_info.clone().is_some_and(|x| {
