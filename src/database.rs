@@ -138,7 +138,7 @@ impl Database {
                         else ether_address
                 end,
                 prev_real_ether_address = case
-                        when ether_address = excluded.real_ether_address
+                        when real_ether_address = excluded.real_ether_address
                         then prev_real_ether_address
                         else real_ether_address
                 end,
