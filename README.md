@@ -119,7 +119,7 @@ HostWatch uses the following packet filter to minimize overhead:
 
 This filter captures:
 - ARP packets (excluding those with source address 0.0.0.0)
-- IPv6 Neighbor Solicitation and Neighbor Advertisement packets (excluding those with source address ::)
+- IPv6 Neighbor Solicitation and Neighbor Advertisement packets
 
 ### Database Schema
 
