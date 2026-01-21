@@ -66,7 +66,8 @@ impl Database {
             Ok(conn) => conn,
             Err(error) => {
                 error!("Unable to connect to database : {error:?}");
-                panic!("Unable to connect to database : {error:?}");
+                println!("Unable to connect to database : {error:?}");
+                std::process::exit(1);
             }
         };
         let mut db = Self { conn };

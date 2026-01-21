@@ -51,7 +51,8 @@ fn main() -> Result<()> {
     tracing_subscriber::registry().with(filter).with(stdout_layer).with(syslog_layer_opt).init();
 
     if !args.interface.contains(&"any".to_string()) && !args.filename.clone().unwrap_or("".to_string()).is_empty() {
-        panic!("File [-F] and interface [-i] modes can not be combined");
+        println!("File [-F] and interface [-i] modes can not be combined");
+        std::process::exit(1);
     }
     info!("Starting hostwatch on interface: {:?}", args.interface);
     info!("Database: {}", args.database);
@@ -70,7 +71,8 @@ fn main() -> Result<()> {
             }
         };
         if !is_valid {
-            panic!("Network {} not valid", network);
+            println!("Network {} not valid", network);
+            std::process::exit(1);
         } else {
             info!("Skipping network: {}", network);
         }
