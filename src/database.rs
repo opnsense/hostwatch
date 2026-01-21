@@ -70,6 +70,13 @@ impl Database {
                 std::process::exit(1);
             }
         };
+        if let Err(error) = conn.execute_batch("
+            pragma journal_mode = WAL;
+            pragma synchronous = NORMAL;
+            pragma temp_store = MEMORY;
+        ") {
+            error!("Failed to apply PRAGMAs: {error:?}");
+        }
         let mut db = Self { conn };
         db.initialize_tables()?;
         match db.import_oui_csv(oui_path.as_str()) {
