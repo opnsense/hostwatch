@@ -69,6 +69,16 @@ impl Database {
                 panic!("Unable to connect to database : {error:?}");
             }
         };
+        // WAL mode and NORMAL synchronous level significantly reduce disk IOps
+        let optimization_result = conn.execute_batch("
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
+            PRAGMA cache_size = -10000;
+            PRAGMA temp_store = MEMORY;
+        ");
+        if let Err(error) = optimization_result {
+        error!("Failed to apply performance PRAGMAs: {error:?}");
+        }
         let mut db = Self { conn };
         db.initialize_tables()?;
         match db.import_oui_csv(oui_path.as_str()) {
