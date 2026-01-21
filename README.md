@@ -114,7 +114,7 @@ Options:
 
 HostWatch uses the following packet filter to minimize overhead:
 ```
-((arp && not src 0) || (icmp6 && (icmp6[icmp6type] == icmp6-neighborsolicit || icmp6[icmp6type] == icmp6-neighboradvert) && not src ::))
+((arp && not src 0) || (icmp6 && (icmp6[icmp6type] == icmp6-neighborsolicit || icmp6[icmp6type] == icmp6-neighboradvert)))
 ```
 
 This filter captures:
