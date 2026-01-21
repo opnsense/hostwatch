@@ -4,7 +4,7 @@ use std::thread;
 use anyhow::{anyhow, Result};
 use pcap::{Active, Activated, Offline, Capture, Device, Error as PcapError};
 use clap::Parser;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 use pnet::packet::arp::ArpPacket;
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::{ethernet::EthernetPacket, Packet};
@@ -252,13 +252,18 @@ impl HostWatch {
         for device in devices {
             if self.interfaces.contains(&"any".to_string()) || self.interfaces.contains(&device.name.clone()) {
                 if let Ok(capture) = self.create_device_capture(&device) {
+                    let datalink = capture.get_datalink();
+                    if datalink != pcap::Linktype::ETHERNET {
+                        info!("Skip capture for device: {} Link type: {:?}", device.name, datalink);
+                        continue;
+                    }
                     self.device_captures.push(capture);
                     self.system_interfaces.push(device.name.clone());
                     info!("Added capture for device: {} ({})", 
                           device.name, 
                           device.desc.as_deref().unwrap_or("No description"));
                 } else {
-                    warn!("Failed to initialize capture for device: {}", device.name);
+                    info!("Skip capture for device: {}", device.name);
                 }    
             }
         }
