@@ -1,0 +1,52 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  rustfmt:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v5
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check the formatting
+        run: cargo fmt --all -- --check --verbose
+
+  clippy:
+    name: Lints
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v5
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Check the lints
+        run: cargo clippy --lib --tests --bins --examples --verbose -- -D warnings
+
+  # No need since project currently does not have tests
+  # build_and_test:
+  #   name: Build and test suite
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix:
+  #       toolchain:
+  #         - stable
+  #         # - beta
+  #         # - nightly
+  #   steps:
+  #     - uses: actions/checkout@v5
+  #     - run: rustup update ${{ matrix.toolchain }} && rustup default ${{ matrix.toolchain }}
+  #     - run: cargo build --verbose
+  #     - run: cargo test --verbose
