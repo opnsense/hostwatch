@@ -340,6 +340,7 @@ impl HostWatch {
                     break;
                 }
                 Err(e) => {
+                    /* XXX: not sure if there are errors we can recover from, for now assume cycling will lead to the same issue */
                     error!("Error reading from capture: {}, exit {}", e, interface_name);
                     break;
                 }
