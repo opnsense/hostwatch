@@ -173,7 +173,7 @@ impl HostWatch {
                 Self::capture_packets(capture, interface_name, tx_clone)
             });
         }
-        for (_i, capture) in self.file_captures.drain(..).enumerate() {
+        for capture in self.file_captures.drain(..) {
             let tx_clone = tx.clone();
             thread::spawn(move || {
                 Self::capture_packets(capture, "pcap".to_string(), tx_clone)
