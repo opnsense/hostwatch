@@ -144,12 +144,17 @@ impl Database {
                         else real_ether_address
                 end,
                 prev_last_seen = case
-                        when ether_address = excluded.ether_address and real_ether_address = excluded.prev_real_ether_address
+                        when ether_address = excluded.ether_address and real_ether_address = excluded.real_ether_address
                         then prev_last_seen
                         else last_seen
                 end,
-                update_interval_sec = cast(strftime('%s', current_timestamp) as integer) -
-                    cast(strftime('%s', last_seen) as integer)
+                -- only set update_interval_sec to a value other than -1 when  some relevant update has been captured
+                -- this works both as a modification indicator and a counter (time) between now and last update (last_seen)
+                update_interval_sec = case
+                        when ether_address = excluded.ether_address and real_ether_address = excluded.real_ether_address
+                        then -1
+                        else cast(strftime('%s', current_timestamp) as integer) - cast(strftime('%s', last_seen) as integer)
+                end
             returning
                 id, first_seen, last_seen, prev_ether_address, prev_real_ether_address,
                 prev_last_seen, update_interval_sec,

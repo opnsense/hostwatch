@@ -194,20 +194,21 @@ impl HostWatch {
                 );
             } else if host_info.clone().is_some_and(|x| {
                     x.ether_address != x.prev_ether_address &&
+                    x.sec_since_last_update.is_some_and(|x| x > -1) &&
                     x.ether_address.is_some() &&
                     x.prev_ether_address.is_some()
             }){
-                // XXX disabled due to #10
-                //info!(
-                //    "changed ethernet address host {} moved from {} to {} at {}",
-                //    host_info.clone().unwrap().ip_address.unwrap_or_else(|| String::from("")),
-                //    host_info.clone().unwrap().prev_ether_address.unwrap_or_else(|| String::from("")),
-                //    host_info.clone().unwrap().ether_address.unwrap_or_else(|| String::from("")),
-                //    host_info.clone().unwrap().interface_name.unwrap_or_else(|| String::from(""))
-                //);
+                info!(
+                   "changed ethernet address host {} moved from {} to {} at {}",
+                   host_info.clone().unwrap().ip_address.unwrap_or_else(|| String::from("")),
+                   host_info.clone().unwrap().prev_ether_address.unwrap_or_else(|| String::from("")),
+                   host_info.clone().unwrap().ether_address.unwrap_or_else(|| String::from("")),
+                   host_info.clone().unwrap().interface_name.unwrap_or_else(|| String::from(""))
+                );
             } else if host_info.clone().is_some_and(|x| {
                     x.ether_address != x.real_ether_address &&
                     x.real_ether_address != x.prev_real_ether_address &&
+                    x.sec_since_last_update.is_some_and(|x| x > -1) &&
                     x.ether_address.is_some() &&
                     x.real_ether_address.is_some()
             }){
@@ -339,9 +340,8 @@ impl HostWatch {
                     break;
                 }
                 Err(e) => {
-                    // XXX disabled due to #8
-                    //error!("Error reading from capture: {}", e);
-                    // Continue with other captures
+                    error!("Error reading from capture: {}, exit {}", e, interface_name);
+                    break;
                 }
             }
         }
