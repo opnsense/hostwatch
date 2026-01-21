@@ -335,7 +335,7 @@ impl HostWatch {
                             }
                         }
                     }
-                    if !host_info.ip_address.is_none() {
+                    if host_info.ip_address.is_some() {
                         tx.send(host_info).unwrap();
                     }
                 }
