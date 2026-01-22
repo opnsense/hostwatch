@@ -1,11 +1,6 @@
 use anyhow::{Result};
 use clap::Parser;
-use std::{
-    str::FromStr,
-    fs,
-    thread::sleep,
-    time::{Duration, Instant},
-};
+use std::str::FromStr;
 use cidr::{Ipv4Cidr, Ipv6Cidr};
 use tracing::{info};
 use syslog_tracing::{Syslog};
@@ -108,23 +103,6 @@ fn main() -> Result<()> {
                 child.run().expect("Failed to execute captures")
             },
             Err(e) => eprintln!("Error, {}", e),
-        }
-        /* wait until the pid file is created and has a non zero size for a maximum of 3 seconds */
-        let start = Instant::now();
-        while start.elapsed() < Duration::from_secs(5) {
-            match fs::metadata(args.clone().pid_file.as_str()) {
-                Ok(metadata) if metadata.len() > 0 => {
-                    break
-                }
-                Ok(_) => {
-                    // file exists but size == 0
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                    // file doesn't exist yet
-                }
-                Err(_e) => break,
-            }
-            sleep(Duration::from_secs(1));
         }
     }
 
