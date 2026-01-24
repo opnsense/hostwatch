@@ -95,7 +95,7 @@ fn main() -> Result<()> {
             daemonize = daemonize.user(args.clone().user.unwrap().as_str());
         }
         if args.clone().group.is_some() {
-            daemonize = daemonize.user(args.clone().group.unwrap().as_str());
+            daemonize = daemonize.group(args.clone().group.unwrap().as_str());
         }
 
         match daemonize.start() {
