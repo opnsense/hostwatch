@@ -1,8 +1,8 @@
-use anyhow::{Result};
-use rusqlite::Connection;
-use tracing::{debug, info, error};
+use anyhow::Result;
 use csv;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use tracing::{debug, error, info};
 
 /**
  * Host info record, used to update and return host information
@@ -23,7 +23,7 @@ pub struct HostInfo {
     pub prev_real_ether_address: Option<String>,
     pub prev_last_seen: Option<String>,
     pub was_inserted: Option<i32>,
-    pub sec_since_last_update: Option<i32>
+    pub sec_since_last_update: Option<i32>,
 }
 
 impl HostInfo {
@@ -53,12 +53,12 @@ pub struct OUI {
     #[serde(rename = "Organization Name")]
     pub organization_name: String,
     #[serde(rename = "Organization Address")]
-    pub organization_address: String
+    pub organization_address: String,
 }
 
 pub struct Database {
     conn: Connection,
-    transaction_counter: i32
+    transaction_counter: i32,
 }
 
 impl Database {
@@ -71,15 +71,20 @@ impl Database {
                 std::process::exit(1);
             }
         };
-        if let Err(error) = conn.execute_batch("
+        if let Err(error) = conn.execute_batch(
+            "
             pragma journal_mode = WAL;
             pragma journal_size_limit = 134217728; -- 128MB
             pragma synchronous = NORMAL;
             pragma temp_store = MEMORY;
-        ") {
+        ",
+        ) {
             error!("Failed to apply PRAGMAs: {error:?}");
         }
-        let mut db = Self { conn, transaction_counter: 0 };
+        let mut db = Self {
+            conn,
+            transaction_counter: 0,
+        };
         db.initialize_tables()?;
         match db.import_oui_csv(oui_path.as_str()) {
             Ok(_) => {}
@@ -186,23 +191,25 @@ impl Database {
                 host_info.real_ether_address,
                 host_info.ip_address
             ],
-            |row| Ok({
-                let mut result = HostInfo::new();
-                result.interface_name = host_info.interface_name.clone();
-                result.ip_address = host_info.ip_address.clone();
-                result.protocol = host_info.protocol.clone();
-                result.ether_address = host_info.ether_address.clone();
-                result.real_ether_address = host_info.real_ether_address.clone();
-                result.id = row.get(0)?;
-                result.first_seen = row.get(1)?;
-                result.last_seen = row.get(2)?;
-                result.prev_ether_address = row.get(3)?;
-                result.prev_real_ether_address = row.get(4)?;
-                result.prev_last_seen = row.get(5)?;
-                result.sec_since_last_update = row.get(6)?;
-                result.was_inserted = row.get(7)?;
-                result
-            })
+            |row| {
+                Ok({
+                    let mut result = HostInfo::new();
+                    result.interface_name = host_info.interface_name.clone();
+                    result.ip_address = host_info.ip_address.clone();
+                    result.protocol = host_info.protocol.clone();
+                    result.ether_address = host_info.ether_address.clone();
+                    result.real_ether_address = host_info.real_ether_address.clone();
+                    result.id = row.get(0)?;
+                    result.first_seen = row.get(1)?;
+                    result.last_seen = row.get(2)?;
+                    result.prev_ether_address = row.get(3)?;
+                    result.prev_real_ether_address = row.get(4)?;
+                    result.prev_last_seen = row.get(5)?;
+                    result.sec_since_last_update = row.get(6)?;
+                    result.was_inserted = row.get(7)?;
+                    result
+                })
+            },
         ) {
             Ok(result) => Ok(Some(result)),
             Err(e) => {
@@ -230,7 +237,7 @@ impl Database {
                             oui.assignment.trim(),
                             oui.organization_name.trim(),
                             oui.organization_address.trim()
-                        ]
+                        ],
                     )?;
                 }
                 Err(e) => eprintln!("row {} error: {}", i + 2, e), // +2 to account for header and 0-index

@@ -1,18 +1,18 @@
-use std::sync::{mpsc};
-use std::sync::mpsc::Sender;
-use std::thread;
 use anyhow::{anyhow, Result};
-use pcap::{Active, Activated, Offline, Capture, Device, Error as PcapError};
 use clap::Parser;
-use tracing::{debug, error, info};
+use pcap::{Activated, Active, Capture, Device, Error as PcapError, Offline};
 use pnet::packet::arp::ArpPacket;
+use pnet::packet::ethernet::EtherTypes;
+use pnet::packet::icmpv6::ndp::NeighborSolicitPacket;
+use pnet::packet::icmpv6::{Icmpv6Packet, Icmpv6Types};
+use pnet::packet::ip::IpNextHeaderProtocols;
 use pnet::packet::ipv6::Ipv6Packet;
 use pnet::packet::{ethernet::EthernetPacket, Packet};
-use pnet::packet::ethernet::EtherTypes;
-use pnet::packet::icmpv6::{Icmpv6Packet, Icmpv6Types};
-use pnet::packet::icmpv6::ndp::NeighborSolicitPacket;
-use pnet::packet::ip::IpNextHeaderProtocols;
 use std::net::Ipv6Addr;
+use std::sync::mpsc;
+use std::sync::mpsc::Sender;
+use std::thread;
+use tracing::{debug, error, info};
 
 pub mod database;
 
@@ -27,7 +27,7 @@ pub struct Args {
     pub interface: Vec<String>,
 
     /// pcap file source
-    #[arg(short='F', long)]
+    #[arg(short = 'F', long)]
     pub filename: Option<String>,
 
     /// Networks to ignore
@@ -39,7 +39,11 @@ pub struct Args {
     pub database: String,
 
     /// Path to oui.csv source file
-    #[arg(short, long, default_value = "/usr/local/opnsense/contrib/ieee/oui.csv")]
+    #[arg(
+        short,
+        long,
+        default_value = "/usr/local/opnsense/contrib/ieee/oui.csv"
+    )]
     pub oui_path: String,
 
     /// Disable promiscuous mode
@@ -51,7 +55,7 @@ pub struct Args {
     pub verbose: bool,
 
     /// PID file
-    #[arg(short='P', long, default_value="/var/run/hostwatch.pid")]
+    #[arg(short = 'P', long, default_value = "/var/run/hostwatch.pid")]
     pub pid_file: String,
 
     /// Username to use after startup
@@ -89,7 +93,7 @@ pub struct Args {
 
 fn parse_permissions(string: &str) -> Result<u32, anyhow::Error> {
     let val = u32::from_str_radix(string, 8);
-    if val.clone().is_err() ||val.clone()? > 4095 {
+    if val.clone().is_err() || val.clone()? > 4095 {
         Err(anyhow!("Invalid permissions"))
     } else {
         Ok(val?)
@@ -106,20 +110,27 @@ pub struct HostWatch {
     file_captures: Vec<Capture<Offline>>,
     pcap_filter: String,
     promisc: bool,
-    activity_timeout: u32
+    activity_timeout: u32,
 }
 
 impl HostWatch {
     pub fn new(args: Args) -> Result<Self> {
-        let interfaces = &args.interface.iter().map(|s| s.as_str()).collect::<Vec<_>>();
+        let interfaces = &args
+            .interface
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>();
         let mut pcap_filter = Vec::new();
-        pcap_filter.push("(\
+        pcap_filter.push(
+            "(\
             (arp && not src 0) || \
             (\
                 icmp6 && (icmp6[icmp6type] == icmp6-neighborsolicit || \
                 icmp6[icmp6type] == icmp6-neighboradvert) \
             ))\
-         ".to_string());
+         "
+            .to_string(),
+        );
         for item in args.clone().skip_nets.iter() {
             pcap_filter.push(format!("( net !{} )", item.as_str()));
         }
@@ -133,30 +144,38 @@ impl HostWatch {
             file_captures: Vec::new(),
             promisc: args.clone().promisc,
             activity_timeout: args.activity_timeout,
-            pcap_filter: pcap_filter.join(" && ")
+            pcap_filter: pcap_filter.join(" && "),
         })
     }
 
-
-    pub fn init(mut self) ->  Self {
+    pub fn init(mut self) -> Self {
         self.device_captures.clear();
         self.file_captures.clear();
         self.system_interfaces.clear();
         debug!("pcap filter is: {:?}", self.pcap_filter);
 
         if self.filename.is_some() {
-            info!("Initializing packet capture on file: {:?}", self.filename.clone().unwrap());
+            info!(
+                "Initializing packet capture on file: {:?}",
+                self.filename.clone().unwrap()
+            );
             match self.initialize_file_captures() {
                 Ok(_) => {}
                 Err(_) => {}
             }
         } else {
-            info!("Initializing packet capture on interfaces: {:?}", self.interfaces);
+            info!(
+                "Initializing packet capture on interfaces: {:?}",
+                self.interfaces
+            );
             match self.initialize_device_captures() {
                 Ok(_) => {}
                 Err(_) => {}
             }
-            info!("Starting packet capture loop on {} interfaces...", self.device_captures.len());
+            info!(
+                "Starting packet capture loop on {} interfaces...",
+                self.device_captures.len()
+            );
         }
         self
     }
@@ -167,15 +186,11 @@ impl HostWatch {
         for (i, capture) in self.device_captures.drain(..).enumerate() {
             let interface_name = self.system_interfaces[i].clone();
             let tx_clone = tx.clone();
-            thread::spawn(move || {
-                Self::capture_packets(capture, interface_name, tx_clone)
-            });
+            thread::spawn(move || Self::capture_packets(capture, interface_name, tx_clone));
         }
         for (_i, capture) in self.file_captures.drain(..).enumerate() {
             let tx_clone = tx.clone();
-            thread::spawn(move || {
-                Self::capture_packets(capture, "pcap".to_string(), tx_clone)
-            });
+            thread::spawn(move || Self::capture_packets(capture, "pcap".to_string(), tx_clone));
         }
         drop(tx); // unused original sender
 
@@ -185,46 +200,106 @@ impl HostWatch {
             debug!("discover packet: {:?}", host_info);
             let host_info = database.update_host(&host_info)?;
             /* Signal events via logging */
-            if host_info.clone().is_some_and(|x| x.was_inserted == Some(1)){
+            if host_info.clone().is_some_and(|x| x.was_inserted == Some(1)) {
                 info!(
                     "new station host {} using {} at {}",
-                    host_info.clone().unwrap().ether_address.unwrap_or_else(|| String::from("")),
-                    host_info.clone().unwrap().ip_address.unwrap_or_else(|| String::from("")),
-                    host_info.clone().unwrap().interface_name.unwrap_or_else(|| String::from(""))
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .ether_address
+                        .unwrap_or_else(|| String::from("")),
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .ip_address
+                        .unwrap_or_else(|| String::from("")),
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .interface_name
+                        .unwrap_or_else(|| String::from(""))
                 );
             } else if host_info.clone().is_some_and(|x| {
-                    x.ether_address != x.prev_ether_address &&
-                    x.sec_since_last_update.is_some_and(|x| x > -1) &&
-                    x.ether_address.is_some() &&
-                    x.prev_ether_address.is_some()
-            }){
+                x.ether_address != x.prev_ether_address
+                    && x.sec_since_last_update.is_some_and(|x| x > -1)
+                    && x.ether_address.is_some()
+                    && x.prev_ether_address.is_some()
+            }) {
                 info!(
-                   "changed ethernet address host {} moved from {} to {} at {}",
-                   host_info.clone().unwrap().ip_address.unwrap_or_else(|| String::from("")),
-                   host_info.clone().unwrap().prev_ether_address.unwrap_or_else(|| String::from("")),
-                   host_info.clone().unwrap().ether_address.unwrap_or_else(|| String::from("")),
-                   host_info.clone().unwrap().interface_name.unwrap_or_else(|| String::from(""))
+                    "changed ethernet address host {} moved from {} to {} at {}",
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .ip_address
+                        .unwrap_or_else(|| String::from("")),
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .prev_ether_address
+                        .unwrap_or_else(|| String::from("")),
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .ether_address
+                        .unwrap_or_else(|| String::from("")),
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .interface_name
+                        .unwrap_or_else(|| String::from(""))
                 );
             } else if host_info.clone().is_some_and(|x| {
-                    x.ether_address != x.real_ether_address &&
-                    x.real_ether_address != x.prev_real_ether_address &&
-                    x.sec_since_last_update.is_some_and(|x| x > -1) &&
-                    x.ether_address.is_some() &&
-                    x.real_ether_address.is_some()
-            }){
+                x.ether_address != x.real_ether_address
+                    && x.real_ether_address != x.prev_real_ether_address
+                    && x.sec_since_last_update.is_some_and(|x| x > -1)
+                    && x.ether_address.is_some()
+                    && x.real_ether_address.is_some()
+            }) {
                 info!(
                     "ethernet mismatch host {} at {} announced by {} interface {}",
-                    host_info.clone().unwrap().ip_address.unwrap_or_else(|| String::from("")).as_str(),
-                    host_info.clone().unwrap().ether_address.unwrap_or_else(|| String::from("")),
-                    host_info.clone().unwrap().real_ether_address.unwrap_or_else(|| String::from("")),
-                    host_info.clone().unwrap().interface_name.unwrap_or_else(|| String::from(""))
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .ip_address
+                        .unwrap_or_else(|| String::from(""))
+                        .as_str(),
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .ether_address
+                        .unwrap_or_else(|| String::from("")),
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .real_ether_address
+                        .unwrap_or_else(|| String::from("")),
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .interface_name
+                        .unwrap_or_else(|| String::from(""))
                 );
-            } else if host_info.clone().is_some_and(|x| x.sec_since_last_update.is_some_and(|x| x > self.activity_timeout as i32)) {
+            } else if host_info.clone().is_some_and(|x| {
+                x.sec_since_last_update
+                    .is_some_and(|x| x > self.activity_timeout as i32)
+            }) {
                 info!(
                     "new station activity {} using {} at {} since {} seconds",
-                    host_info.clone().unwrap().ether_address.unwrap_or_else(|| String::from("")),
-                    host_info.clone().unwrap().ip_address.unwrap_or_else(|| String::from("")),
-                    host_info.clone().unwrap().interface_name.unwrap_or_else(|| String::from("")),
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .ether_address
+                        .unwrap_or_else(|| String::from("")),
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .ip_address
+                        .unwrap_or_else(|| String::from("")),
+                    host_info
+                        .clone()
+                        .unwrap()
+                        .interface_name
+                        .unwrap_or_else(|| String::from("")),
                     host_info.clone().unwrap().sec_since_last_update.unwrap()
                 );
             }
@@ -238,10 +313,16 @@ impl HostWatch {
     fn initialize_file_captures(&mut self) -> Result<()> {
         if let Ok(capture) = self.create_file_capture(self.filename.clone().unwrap()) {
             self.file_captures.push(capture);
-            info!("Added capture for pcap file: {}", self.filename.clone().unwrap());
+            info!(
+                "Added capture for pcap file: {}",
+                self.filename.clone().unwrap()
+            );
             Ok(())
         } else {
-            error!("Failed to initialize capture for pcap file: {}", self.filename.clone().unwrap());
+            error!(
+                "Failed to initialize capture for pcap file: {}",
+                self.filename.clone().unwrap()
+            );
             Err(anyhow!("Failed to initialize file capture"))
         }
     }
@@ -250,33 +331,42 @@ impl HostWatch {
         let devices = Device::list()?;
 
         for device in devices {
-            if self.interfaces.contains(&"any".to_string()) || self.interfaces.contains(&device.name.clone()) {
+            if self.interfaces.contains(&"any".to_string())
+                || self.interfaces.contains(&device.name.clone())
+            {
                 if let Ok(capture) = self.create_device_capture(&device) {
                     let datalink = capture.get_datalink();
                     if datalink != pcap::Linktype::ETHERNET {
-                        info!("Skip capture for device: {} Link type: {:?}", device.name, datalink);
+                        info!(
+                            "Skip capture for device: {} Link type: {:?}",
+                            device.name, datalink
+                        );
                         continue;
                     }
                     self.device_captures.push(capture);
                     self.system_interfaces.push(device.name.clone());
-                    info!("Added capture for device: {} ({})", 
-                          device.name, 
-                          device.desc.as_deref().unwrap_or("No description"));
+                    info!(
+                        "Added capture for device: {} ({})",
+                        device.name,
+                        device.desc.as_deref().unwrap_or("No description")
+                    );
                 } else {
                     info!("Skip capture for device: {}", device.name);
-                }    
+                }
             }
         }
         if self.device_captures.is_empty() {
             return Err(anyhow::anyhow!("No captures could be initialized"));
         }
 
-        info!("Initialized {} packet device_captures", self.device_captures.len());
+        info!(
+            "Initialized {} packet device_captures",
+            self.device_captures.len()
+        );
         Ok(())
     }
 
-    fn create_file_capture(&self, filename: String) -> Result<Capture<Offline>>
-    {
+    fn create_file_capture(&self, filename: String) -> Result<Capture<Offline>> {
         let mut capture = Capture::from_file(filename)?;
         capture.filter(self.pcap_filter.as_str(), true)?;
         Ok(capture)
@@ -295,7 +385,8 @@ impl HostWatch {
     }
 
     fn capture_packets<T>(mut capture: Capture<T>, interface_name: String, tx: Sender<HostInfo>)
-        where T: Activated,
+    where
+        T: Activated,
     {
         loop {
             match capture.next_packet() {
@@ -322,7 +413,9 @@ impl HostWatch {
                             };
                             host_info.ether_address = Some(ethernet.get_source().to_string());
                             host_info.protocol = Some("inet6".to_string());
-                            if ipv6.get_source() == Ipv6Addr::UNSPECIFIED && icmpv6.get_icmpv6_type() == Icmpv6Types::NeighborSolicit {
+                            if ipv6.get_source() == Ipv6Addr::UNSPECIFIED
+                                && icmpv6.get_icmpv6_type() == Icmpv6Types::NeighborSolicit
+                            {
                                 /* Duplicate Address Detection (DAD) can be used to find the GUA/LUA a client intends to use*/
                                 if let Some(ns) = NeighborSolicitPacket::new(icmpv6.packet()) {
                                     host_info.ip_address = Some(ns.get_target_addr().to_string());
