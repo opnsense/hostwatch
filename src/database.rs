@@ -72,8 +72,11 @@ impl Database {
         };
         if let Err(error) = conn.execute_batch("
             pragma journal_mode = WAL;
+            pragma journal_size_limit = 134217728; -- 128MB
+            pragma auto_vacuum = FULL;
             pragma synchronous = NORMAL;
             pragma temp_store = MEMORY;
+            vacuum;
         ") {
             error!("Failed to apply PRAGMAs: {error:?}");
         }
