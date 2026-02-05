@@ -78,6 +78,10 @@ pub struct Args {
     #[arg(short, long, default_value = "2678400")]
     pub activity_timeout: u32,
 
+    /// Update interval [seconds] (update data when unchanged only when seen X seconds ago)
+    #[arg(short='I', long, default_value = "90")]
+    pub update_interval: u32,
+
     /// Send output to syslog
     #[arg(short='S', long, action = clap::ArgAction::SetTrue, default_value_t = false)]
     pub syslog: bool,
@@ -106,7 +110,8 @@ pub struct HostWatch {
     file_captures: Vec<Capture<Offline>>,
     pcap_filter: String,
     promisc: bool,
-    activity_timeout: u32
+    activity_timeout: u32,
+    update_interval: u32
 }
 
 impl HostWatch {
@@ -133,6 +138,7 @@ impl HostWatch {
             file_captures: Vec::new(),
             promisc: args.clone().promisc,
             activity_timeout: args.activity_timeout,
+            update_interval: args.update_interval,
             pcap_filter: pcap_filter.join(" && ")
         })
     }
@@ -183,7 +189,7 @@ impl HostWatch {
         let mut database = Database::new(self.database, self.oui_path)?;
         for host_info in rx {
             debug!("discover packet: {:?}", host_info);
-            let host_info = database.update_host(&host_info)?;
+            let host_info = database.update_host(&host_info, Some(self.update_interval))?;
             /* Signal events via logging */
             if host_info.clone().is_some_and(|x| x.was_inserted == Some(1)){
                 info!(

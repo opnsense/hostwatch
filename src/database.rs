@@ -135,7 +135,36 @@ impl Database {
         Ok(())
     }
 
-    pub fn update_host(&mut self, host_info: &HostInfo) -> Result<Option<HostInfo>> {
+    pub fn update_host(&mut self, host_info: &HostInfo, update_interval: Option<u32>) -> Result<Option<HostInfo>> {
+        /* prevent updates when seen quite recent [update_interval] and nothing relevant has changed */
+        let result: rusqlite::Result<(Option<String>, Option<String>, Option<u32>)> = self.conn.query_row(
+            "
+            select  ether_address,
+                    real_ether_address,
+                    cast(strftime('%s', current_timestamp) as integer) - cast(strftime('%s', last_seen) as integer) ts
+            from    hosts
+            where protocol = ?1 and interface_name = ?2 and ip_address = ?3",
+            rusqlite::params![
+                host_info.protocol,
+                host_info.interface_name,
+                host_info.ip_address
+            ], |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<u32>>(2)?,
+                ))
+            },);
+        if result.is_ok() {
+            let (ether_address, real_ether_address, ts) = result?;
+            if ether_address == host_info.ether_address &&
+                real_ether_address == host_info.real_ether_address &&
+                ts < update_interval
+            {
+                return Ok(None);
+            }
+        }
+
         let sql = "
             insert into hosts (protocol, interface_name, ether_address, real_ether_address, ip_address, update_interval_sec)
             values (?1, ?2, ?3, ?4, ?5, 0)
