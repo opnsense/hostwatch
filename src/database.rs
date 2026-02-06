@@ -46,6 +46,12 @@ impl HostInfo {
     }
 }
 
+impl Default for HostInfo {
+    fn default() -> Self {
+         Self::new()
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct OUI {
     #[serde(rename = "Assignment")]

@@ -33,7 +33,7 @@ fn main() -> Result<()> {
     };
 
     let syslog_layer_opt = if args.syslog {
-        let identity = std::ffi::CStr::from_bytes_with_nul(b"hostwatch\0")?;
+        let identity = c"hostwatch";
         let (options, facility) = Default::default();
         let syslog = Syslog::new(identity, options, facility).unwrap();
         Some(tracing_subscriber::fmt::layer()

@@ -152,12 +152,14 @@ impl HostWatch {
 
         if self.filename.is_some() {
             info!("Initializing packet capture on file: {:?}", self.filename.clone().unwrap());
+            #[allow(clippy::single_match)]
             match self.initialize_file_captures() {
                 Ok(_) => {}
                 Err(_) => {}
             }
         } else {
             info!("Initializing packet capture on interfaces: {:?}", self.interfaces);
+            #[allow(clippy::single_match)]
             match self.initialize_device_captures() {
                 Ok(_) => {}
                 Err(_) => {}
@@ -177,7 +179,7 @@ impl HostWatch {
                 Self::capture_packets(capture, interface_name, tx_clone)
             });
         }
-        for (_i, capture) in self.file_captures.drain(..).enumerate() {
+        for capture in self.file_captures.drain(..) {
             let tx_clone = tx.clone();
             thread::spawn(move || {
                 Self::capture_packets(capture, "pcap".to_string(), tx_clone)
@@ -265,12 +267,12 @@ impl HostWatch {
                     }
                     self.device_captures.push(capture);
                     self.system_interfaces.push(device.name.clone());
-                    info!("Added capture for device: {} ({})", 
-                          device.name, 
+                    info!("Added capture for device: {} ({})",
+                          device.name,
                           device.desc.as_deref().unwrap_or("No description"));
                 } else {
                     info!("Skip capture for device: {}", device.name);
-                }    
+                }
             }
         }
         if self.device_captures.is_empty() {
@@ -339,7 +341,7 @@ impl HostWatch {
                             }
                         }
                     }
-                    if !host_info.ip_address.is_none() {
+                    if host_info.ip_address.is_some() {
                         tx.send(host_info).unwrap();
                     }
                 }
