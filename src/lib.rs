@@ -19,6 +19,14 @@ pub mod database;
 use database::Database;
 use database::HostInfo;
 
+// Use the value set at build time in DEFAULT_OUI_CSV_PATH as default path.
+// If it's not set, default to /usr/local/opnsense/contrib/ieee/oui.csv
+const DEFAULT_OUI_CSV_PATH: &str = if let Some(path) = option_env!("DEFAULT_OUI_CSV_PATH") {
+    path
+} else {
+    "/usr/local/opnsense/contrib/ieee/oui.csv"
+};
+
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
@@ -39,11 +47,7 @@ pub struct Args {
     pub database: String,
 
     /// Path to oui.csv source file
-    #[arg(
-        short,
-        long,
-        default_value = "/usr/local/opnsense/contrib/ieee/oui.csv"
-    )]
+    #[arg(short, long, default_value = DEFAULT_OUI_CSV_PATH)]
     pub oui_path: String,
 
     /// Disable promiscuous mode
