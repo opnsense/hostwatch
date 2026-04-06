@@ -9,6 +9,7 @@ A network monitoring application written in Rust that captures ARP and NDP packe
 - **Persistent Storage**: Stores host information in SQLite database
 - **Real-time Monitoring**: Continuously monitors network traffic for new hosts
 - **Cross-platform**: Works on Linux, macOS, and Windows
+
 ## Requirements
 
 - Rust 1.70 or later
@@ -79,6 +80,8 @@ Usage: hostwatch [OPTIONS]
 Options:
   -i, --interface <INTERFACE>
           Network interface to monitor [default: any]
+  -F, --filename <FILENAME>
+          pcap file source
   -s, --skip-nets <SKIP_NETS>
           Networks to ignore
   -d, --database <DATABASE>
@@ -90,7 +93,7 @@ Options:
   -v, --verbose
           Verbose output
   -P, --pid-file <PID_FILE>
-          PID file
+          PID file [default: /var/run/hostwatch.pid]
   -u, --user <USER>
           Username to use after startup
   -g, --group <GROUP>
@@ -101,6 +104,14 @@ Options:
           Chown the PID file
   -w, --working-directory <WORKING_DIRECTORY>
           Working dir [default: /tmp]
+  -a, --activity-timeout <ACTIVITY_TIMEOUT>
+          Activity timeout [seconds] (report when > x) [default: 2678400]
+  -I, --update-interval <UPDATE_INTERVAL>
+          Update interval [seconds] (update data when unchanged only when seen X seconds ago) [default: 90]
+  -E, --expire4-interval <EXPIRE4_INTERVAL>
+          Remove ipv4 entries after X time of inactivity, with a minium of 1 hour
+  -e, --expire6-interval <EXPIRE6_INTERVAL>
+          Remove ipv6 entries after X time of inactivity, with a minium of 1 hour
   -S, --syslog
           Send output to syslog
   -f, --foreground
