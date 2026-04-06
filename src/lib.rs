@@ -12,6 +12,7 @@ use std::net::Ipv6Addr;
 use std::sync::mpsc;
 use std::sync::mpsc::Sender;
 use std::thread;
+use std::time::{Duration, Instant};
 use tracing::{debug, error, info};
 
 pub mod database;
@@ -90,6 +91,14 @@ pub struct Args {
     #[arg(short = 'I', long, default_value = "90")]
     pub update_interval: u32,
 
+    /// Remove ipv4 entries after X time of inactivity, with a minium of 1 hour
+    #[arg(short='E', long, value_parser = clap::value_parser!(u32).range(3600..))]
+    pub expire4_interval: Option<u32>,
+
+    /// Remove ipv6 entries after X time of inactivity, with a minium of 1 hour
+    #[arg(short='e', long, value_parser = clap::value_parser!(u32).range(3600..))]
+    pub expire6_interval: Option<u32>,
+
     /// Send output to syslog
     #[arg(short='S', long, action = clap::ArgAction::SetTrue, default_value_t = false)]
     pub syslog: bool,
@@ -120,6 +129,8 @@ pub struct HostWatch {
     promisc: bool,
     activity_timeout: u32,
     update_interval: u32,
+    expire4_interval: Option<u32>,
+    expire6_interval: Option<u32>,
 }
 
 impl HostWatch {
@@ -155,6 +166,8 @@ impl HostWatch {
             activity_timeout: args.activity_timeout,
             update_interval: args.update_interval,
             pcap_filter: pcap_filter.join(" && "),
+            expire4_interval: args.expire4_interval,
+            expire6_interval: args.expire6_interval,
         })
     }
 
@@ -208,7 +221,34 @@ impl HostWatch {
 
         // process messages to database in main thread
         let mut database = Database::new(self.database, self.oui_path)?;
+        let expire_interval = {
+            if self.expire4_interval.is_some() || self.expire6_interval.is_some() {
+                Duration::from_secs(900)
+            } else {
+                Duration::from_secs(0)
+            }
+        };
+        let mut last_expire = Instant::now();
         for host_info in rx {
+            /* cleanup on intervals */
+            if expire_interval > Duration::ZERO && last_expire.elapsed() >= expire_interval {
+                if self.expire4_interval.is_some() {
+                    debug!(
+                        "expire ipv4 hosts older than {:?} seconds",
+                        self.expire4_interval
+                    );
+                    database.expire_hosts("inet".to_string(), self.expire4_interval);
+                }
+                if self.expire6_interval.is_some() {
+                    debug!(
+                        "expire ipv6 hosts older than {:?} seconds",
+                        self.expire6_interval
+                    );
+                    database.expire_hosts("inet6".to_string(), self.expire6_interval);
+                }
+                last_expire = Instant::now();
+            }
+            //
             debug!("discover packet: {:?}", host_info);
             let host_info = database.update_host(&host_info, Some(self.update_interval))?;
             /* Signal events via logging */

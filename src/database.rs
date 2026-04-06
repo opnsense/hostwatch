@@ -1,6 +1,6 @@
 use anyhow::Result;
 use csv;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, info};
 
@@ -144,6 +144,15 @@ impl Database {
         }
         info!("Database tables initialized");
         Ok(())
+    }
+
+    pub fn expire_hosts(&mut self, protocol: String, interval: Option<u32>) {
+        let sql = "\
+            delete from hosts \
+            where protocol=?1 \
+            and cast(strftime('%s', current_timestamp) as integer) - cast(strftime('%s', last_seen) as integer) > ?2\
+        ";
+        let _ = self.conn.execute(sql, params![protocol, interval]);
     }
 
     pub fn update_host(
