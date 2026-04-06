@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 pcap = "1.0"
-rusqlite = { version = "0.38", features = ["bundled"] }
+rusqlite = { version = "0.38" }
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
@@ -17,3 +17,6 @@ cidr = "0.3.1"
 syslog-tracing = "0.3.1"
 daemonize = "0.5.0"
 
+[features]
+default = ["rusqlite-bundled"]
+rusqlite-bundled = ["rusqlite/bundled"]
