@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 pcap = "2.4.0"
-rusqlite = { version = "0.39", features = ["bundled"] }
+rusqlite = { version = "0.39" }
 anyhow = "1.0"
 clap = { version = "4.0", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
