@@ -230,7 +230,7 @@ impl Database {
             self.conn.execute("vacuum", [])?;
             self.transaction_counter = 0;
         }
-        match self.conn.query_row(
+        match self.conn.query_one(
             sql,
             rusqlite::params![
                 host_info.protocol,
