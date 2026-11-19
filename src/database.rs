@@ -64,7 +64,6 @@ pub struct OUI {
 
 pub struct Database {
     conn: Connection,
-    transaction_counter: i32,
 }
 
 impl Database {
@@ -81,16 +80,14 @@ impl Database {
             "
             pragma journal_mode = WAL;
             pragma journal_size_limit = 134217728; -- 128MB
+            pragma auto_vacuum = FULL;
             pragma synchronous = NORMAL;
             pragma temp_store = MEMORY;
         ",
         ) {
             error!("Failed to apply PRAGMAs: {error:?}");
         }
-        let mut db = Self {
-            conn,
-            transaction_counter: 0,
-        };
+        let mut db = Self { conn };
         db.initialize_tables()?;
         match db.import_oui_csv(oui_path.as_str()) {
             Ok(_) => {}
@@ -224,13 +221,7 @@ impl Database {
 
         ";
         debug!("{:?} {:?}", sql.trim(), host_info);
-        self.transaction_counter += 1;
-        if self.transaction_counter > 10000 {
-            /* force a vacuum every X updates */
-            self.conn.execute("vacuum", [])?;
-            self.transaction_counter = 0;
-        }
-        match self.conn.query_row(
+        match self.conn.query_one(
             sql,
             rusqlite::params![
                 host_info.protocol,

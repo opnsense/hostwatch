@@ -12,7 +12,7 @@ A network monitoring application written in Rust that captures ARP and NDP packe
 
 ## Requirements
 
-- Rust 1.70 or later
+- Rust 1.89 or later
 - libpcap development libraries
 - SQLite development libraries (optional, `rusqlite-bundled` feature bundles a version by default)
 - Root/Administrator privileges (for packet capture)
